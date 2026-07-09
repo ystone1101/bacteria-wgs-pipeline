@@ -279,16 +279,9 @@ If you use this pipeline, please cite the underlying tools:
   Pevzner PA. hybridSPAdes: an algorithm for hybrid assembly of short and
   long reads. *Bioinformatics*. 2016;32(7):1009–1015.
   [doi:10.1093/bioinformatics/btv688](https://doi.org/10.1093/bioinformatics/btv688)
-- Bushnell B. BBMap / BBTools. No peer-reviewed paper; cite the software
-  directly: [bbmap.org](https://bbmap.org/) (or the conference paper,
-  [escholarship.org/uc/item/1h3515gn](https://escholarship.org/uc/item/1h3515gn)).
-- Wick RR. Filtlong. No associated paper; cite the repository:
-  [github.com/rrwick/Filtlong](https://github.com/rrwick/Filtlong)
 - Kolmogorov M, Yuan J, Lin Y, Pevzner PA. Assembly of long, error-prone
   reads using repeat graphs. *Nat Biotechnol*. 2019;37:540–546.
   [doi:10.1038/s41587-019-0072-8](https://doi.org/10.1038/s41587-019-0072-8)
-- Oxford Nanopore Technologies. medaka. No associated paper; cite the
-  repository: [github.com/nanoporetech/medaka](https://github.com/nanoporetech/medaka)
 - Li H. Minimap2: pairwise alignment for nucleotide sequences.
   *Bioinformatics*. 2018;34(18):3094–3100.
   [doi:10.1093/bioinformatics/bty191](https://doi.org/10.1093/bioinformatics/bty191)
