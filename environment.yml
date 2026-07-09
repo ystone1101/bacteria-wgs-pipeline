@@ -13,6 +13,10 @@ dependencies:
   # own code still calls .decode() on it and crashes during Pfam annotation.
   # Pin below that break until bakta ships a fix (or bump bakta and drop this).
   - pyhmmer <0.12
+  # setuptools 82.0 (Feb 2026) removed pkg_resources entirely, which
+  # breaks checkm-genome (and other tools still importing it the old way)
+  # with "ModuleNotFoundError: No module named 'pkg_resources'".
+  - setuptools <82
   - filtlong
   - flye
   - medaka

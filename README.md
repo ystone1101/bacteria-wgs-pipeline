@@ -264,6 +264,9 @@ Finally:
 - `bakta<=1.11.4` crashes late in the annotation step (`AttributeError:
   'str' object has no attribute 'decode'`) if paired with `pyhmmer>=0.12`
   — `environment.yml` pins `pyhmmer<0.12` to avoid this.
+- `setuptools>=82` (Feb 2026) removed `pkg_resources` entirely, which
+  breaks `checkm-genome` (`ModuleNotFoundError: No module named
+  'pkg_resources'`) — `environment.yml` pins `setuptools<82` to avoid this.
 
 ## References
 
