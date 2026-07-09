@@ -1,0 +1,21 @@
+name: bacteria_wgs
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - trimmomatic
+  - spades
+  - bbmap
+  - quast
+  - checkm-genome
+  - bakta
+  # pyhmmer>=0.12 made Hit.name return str instead of bytes; bakta<=1.11.4's
+  # own code still calls .decode() on it and crashes during Pfam annotation.
+  # Pin below that break until bakta ships a fix (or bump bakta and drop this).
+  - pyhmmer <0.12
+  - filtlong
+  - flye
+  - medaka
+  - minimap2
+  - samtools
+  - mosdepth
