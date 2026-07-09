@@ -27,49 +27,73 @@ and selects one of:
 All modes converge on the same final assembly FASTA, so CheckM (batch, over
 every sample) and Bakta annotation run identically regardless of mode.
 
-## Requirements
+## Getting started
 
-The following tools must be on `PATH` (a working `environment.yml` that
-installs all of them into one conda env is included):
+### 1. Clone the repository
 
-- `trimmomatic`, `spades.py`, `bbmap.sh` — short / hybrid_*
-- `filtlong`, `minimap2`, `samtools`, `flye`, `mosdepth` — long_* / hybrid_*
-- `medaka_consensus` — long_np only
-- `pileup.sh` (part of BBMap) — hybrid_* only
-- `reformat.sh`, `quast.py`, `checkm`, `bakta` — every mode
+```bash
+git clone https://github.com/ystone1101/bacteria-wgs-pipeline.git
+cd bacteria-wgs-pipeline
+```
+
+### 2. Create the conda environment
+
+Requires [conda](https://docs.conda.io/) or [mamba](https://mamba.readthedocs.io/)
+(mamba solves much faster — recommended). `environment.yml` installs every
+tool the pipeline needs into one env called `bacteria_wgs`:
 
 ```bash
 mamba env create -f environment.yml   # or: conda env create -f environment.yml
-conda activate bacteria_wgs
 ```
 
-## Setup
+### 3. Activate it and sanity-check the tools
 
-`config.sh` holds machine-specific paths and is git-ignored, since it points
-at things like your Trimmomatic adapter file and Bakta database — not
-something to publish. Create your own from the template and edit it:
+```bash
+conda activate bacteria_wgs
+
+trimmomatic -version
+spades.py --version
+flye --version
+medaka --version
+quast.py --version
+checkm -h > /dev/null && echo "checkm OK"
+bakta --version
+```
+
+You'll need to reactivate this env (`conda activate bacteria_wgs`) in every
+new terminal session before running the pipeline.
+
+### 4. Set up `config.sh`
+
+`config.sh` holds machine-specific paths (adapter file, Bakta database,
+etc.) and is git-ignored — it's meant to stay local, not get committed.
+Create your own from the template:
 
 ```bash
 cp config.example.sh config.sh
 ```
 
-Edit `config.sh` (or pass the equivalent flags instead) to set:
+Then edit `config.sh` and fill in:
 
-- `ADAPTER` — Trimmomatic adapter FASTA (short/hybrid_*)
-- `BAKTA_DB` — Bakta database directory
-- `TMP_DIR` — Bakta temp directory
-- `THREADS`, `MIN_LENGTH` — defaults for every run
-- `FILTLONG_MIN_LENGTH`, `FILTLONG_KEEP_PERCENT` — long-read filtering (long_*/hybrid_*)
-- `FLYE_READ_TYPE` — `--nano-hq` / `--nano-raw` (long_np only)
-- `MEDAKA_MODEL` — must match your basecaller/flow cell/kit; no safe default,
-  the pipeline refuses to start in long_np mode until this is set
-  (`medaka tools list_models` to see what's available)
-- `FLYE_PACBIO_READ_TYPE` — `--pacbio-hifi` / `--pacbio-raw` (long_pb only)
+| Variable | Used by | Notes |
+|---|---|---|
+| `THREADS` | every mode | default thread count for every tool |
+| `ADAPTER` | short / hybrid_* | Trimmomatic adapter FASTA, absolute path |
+| `BAKTA_DB` | every mode | Bakta database directory, absolute path |
+| `TMP_DIR` | every mode | Bakta temp directory, absolute path |
+| `MIN_LENGTH` | every mode | min contig length kept after assembly |
+| `FILTLONG_MIN_LENGTH`, `FILTLONG_KEEP_PERCENT` | long_*/hybrid_* | long-read filtering |
+| `FLYE_READ_TYPE` | long_np | `--nano-hq` or `--nano-raw` |
+| `MEDAKA_MODEL` | long_np | **no safe default** — must match your basecaller/flow cell/kit, or the pipeline refuses to start; run `medaka tools list_models` to see what's available |
+| `FLYE_PACBIO_READ_TYPE` | long_pb | `--pacbio-hifi` or `--pacbio-raw` |
 
-## Running it from anywhere
+Any of these can also be overridden per-run with a command-line flag
+instead of editing `config.sh` (see `-h`).
 
-To call the pipeline like a regular command instead of `cd`-ing into this
-folder every time:
+### 5. (Optional) Put the pipeline on `PATH`
+
+So you can call it as a plain command from any directory, instead of
+`cd`-ing into this folder every time:
 
 ```bash
 mkdir -p ~/tools/bacteria_wgs_pipeline
@@ -83,17 +107,36 @@ ln -s ~/tools/bacteria_wgs_pipeline/bacteria_wgs_pipeline.sh \
 
 The script resolves symlinks back to its real directory, so it still finds
 `config.sh` next to itself. From then on, whenever the `bacteria_wgs` env is
-active, `bacteria_wgs_pipeline` works from any directory.
+active, `bacteria_wgs_pipeline` works from any directory. (The examples
+below use `./bacteria_wgs_pipeline.sh`; swap in `bacteria_wgs_pipeline` if
+you did this step.)
 
-## Usage
+### 6. Lay out your reads
+
+Sample names come from the read filenames — pick a folder per read type
+and name files by sample:
+
+- Short reads (Illumina): `<sample>_1.fastq.gz`, `<sample>_2.fastq.gz`
+- Long reads (Nanopore/PacBio): `<sample>.fastq.gz` (one file per sample)
+
+For `hybrid_np`/`hybrid_pb`, the short-read and long-read directories must
+use the **same sample name** for the same sample — that's how the script
+matches an Illumina pair to its long reads:
+
+```
+raw_read/16N2L7_1.fastq.gz   raw_read/16N2L7_2.fastq.gz
+raw_long/16N2L7.fastq.gz
+```
+
+### 7. Run it
 
 `--mode` is required; the script refuses to run without it.
 
 ```bash
-# Illumina only: every sample in raw_read/ (expects <sample>_1.fastq.gz / _2.fastq.gz)
+# Illumina only: every sample in raw_read/
 ./bacteria_wgs_pipeline.sh --mode short -r raw_read -o results
 
-# Nanopore only: every sample in raw_long/ (expects <sample>.fastq.gz)
+# Nanopore only: every sample in raw_long/
 ./bacteria_wgs_pipeline.sh --mode long_np -l raw_long -o results
 
 # PacBio HiFi only
@@ -105,14 +148,36 @@ active, `bacteria_wgs_pipeline` works from any directory.
 
 # Process specific samples only
 ./bacteria_wgs_pipeline.sh --mode short -r raw_read -o results -s 18H3P11,18H3P12
-
-# Re-run only the annotation step after fixing something upstream
-./bacteria_wgs_pipeline.sh --mode short -r raw_read -o results --skip-checkm --force
 ```
 
 Run `./bacteria_wgs_pipeline.sh -h` for the full option list.
 
-## What it does
+### 8. Check the results
+
+Everything lands under the `-o` directory, numbered so it sorts in
+pipeline order:
+
+```
+results/
+├── 00_logs/         one log file per sample per step
+├── 01_QC/<sample>/  trimmed/filtered reads
+├── 02_assembly/<sample>/
+├── 03_quast/<sample>/  QUAST report + coverage stats
+├── 04_checkm/       bins/ (all samples' assemblies) + output/ (batch results)
+└── 05_bakta/<sample>/  annotation (gff3, faa, gbff, ...)
+```
+
+Progress prints with colored `START`/`DONE`/`FAIL`/`SKIP` status and a
+summary at the end; colors auto-disable when output isn't a terminal (e.g.
+redirected to a log file).
+
+### 9. If a run fails partway through
+
+Just re-run the same command. Each step is skipped if its expected output
+already exists, so you resume right after the failure instead of starting
+over. Pass `--force` to re-run every step regardless.
+
+## What each mode does, in detail
 
 For every sample, depending on `--mode`:
 
@@ -155,16 +220,12 @@ Finally:
 
 - **Bakta** annotates each sample's final assembly (`05_bakta/<sample>/`).
 
-## Resuming / re-running
-
-Each step is skipped if its expected output already exists, so a failed or
-interrupted run can simply be re-invoked with the same arguments to continue
-where it left off. Pass `--force` to re-run every step regardless. Logs for
-every step are written to `00_logs/`.
-
 ## Notes
 
 - CheckM is a batch step: it is most meaningful once you have multiple
   genomes to compare, so it only runs after all requested samples finish
   assembly. Use `--skip-checkm` to defer it (e.g. when adding a single new
   sample to a set already assessed).
+- `bakta<=1.11.4` crashes late in the annotation step (`AttributeError:
+  'str' object has no attribute 'decode'`) if paired with `pyhmmer>=0.12`
+  — `environment.yml` pins `pyhmmer<0.12` to avoid this.
