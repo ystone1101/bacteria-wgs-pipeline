@@ -1,5 +1,7 @@
 # Bacteria WGS Pipeline
 
+![Pipeline overview](pipeline.png)
+
 One script for bacterial whole-genome sequencing analysis:
 assembly → assembly QC → CheckM → Bakta annotation. `--mode` is required
 and selects one of:
