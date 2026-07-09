@@ -96,7 +96,43 @@ Install each tool listed in [Tools](#tools) yourself and confirm it's on
 no environment to activate — just make sure every tool resolves before you
 run the pipeline.
 
-### 3. Set up `config.sh`
+### 3. Set up reference databases
+
+Two tools need an external database on top of what conda installs — a
+one-time download per machine, separate from installing the tools
+themselves.
+
+**Bakta** (every mode):
+
+```bash
+bakta_db download --output /path/to/bakta_db --type full
+```
+
+Point `BAKTA_DB` at the resulting `db/` directory in the next step.
+
+**CheckM** (every mode, unless you pass `--skip-checkm`) — see the
+[official CheckM installation guide](https://github.com/Ecogenomics/CheckM/wiki/Installation)
+for background/alternatives; the short version:
+
+```bash
+mkdir -p ~/checkm_data && cd ~/checkm_data
+wget https://data.ace.uq.edu.au/public/CheckM_databases/checkm_data_2015_01_16.tar.gz
+tar -xzvf checkm_data_2015_01_16.tar.gz
+
+conda activate bacteria_wgs
+checkm data setRoot ~/checkm_data
+```
+
+Unlike Bakta, CheckM's data path isn't part of `config.sh` — `checkm data
+setRoot <path>` stores it globally per-user
+(`~/.checkm`-adjacent config, unrelated to which conda env or project
+you're running from), so you only need to do this once per machine. If you
+forget this step, CheckM fails partway through `checkm_lineage_wf` with
+`FileNotFoundError: ... hmms/phylo.hmm` after everything else in the run
+has already finished — re-run the pipeline once this is set up and it
+resumes from the CheckM step.
+
+### 4. Set up `config.sh`
 
 `config.sh` holds machine-specific paths (adapter file, Bakta database,
 etc.) and is git-ignored — it's meant to stay local, not get committed.
@@ -123,7 +159,7 @@ Then edit `config.sh` and fill in:
 Any of these can also be overridden per-run with a command-line flag
 instead of editing `config.sh` (see `-h`).
 
-### 4. (Optional) Put the pipeline on `PATH`
+### 5. (Optional) Put the pipeline on `PATH`
 
 So you can call it as a plain command from any directory, instead of
 `cd`-ing into this folder every time:
@@ -146,7 +182,7 @@ The script resolves symlinks back to its real directory, so it still finds
 from any directory. (The examples below use `./bacteria_wgs_pipeline.sh`;
 swap in `bacteria_wgs_pipeline` if you did this step.)
 
-### 5. Lay out your reads
+### 6. Lay out your reads
 
 Sample names come from the read filenames — pick a folder per read type
 and name files by sample:
@@ -163,7 +199,7 @@ raw_read/16N2L7_1.fastq.gz   raw_read/16N2L7_2.fastq.gz
 raw_long/16N2L7.fastq.gz
 ```
 
-### 6. Run it
+### 7. Run it
 
 `--mode` is required; the script refuses to run without it.
 
@@ -187,7 +223,7 @@ raw_long/16N2L7.fastq.gz
 
 Run `./bacteria_wgs_pipeline.sh -h` for the full option list.
 
-### 7. Check the results
+### 8. Check the results
 
 Everything lands under the `-o` directory, numbered so it sorts in
 pipeline order:
@@ -206,7 +242,7 @@ Progress prints with colored `START`/`DONE`/`FAIL`/`SKIP` status and a
 summary at the end; colors auto-disable when output isn't a terminal (e.g.
 redirected to a log file).
 
-### 8. If a run fails partway through
+### 9. If a run fails partway through
 
 Just re-run the same command. Each step is skipped if its expected output
 already exists, so you resume right after the failure instead of starting
