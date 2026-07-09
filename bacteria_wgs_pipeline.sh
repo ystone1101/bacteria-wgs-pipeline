@@ -81,7 +81,8 @@ Usage: $(basename "$0") --mode {short,long_np,long_pb,hybrid_np,hybrid_pb} [opti
                   long_pb    PacBio HiFi only
                   hybrid_np  Illumina + Nanopore
                   hybrid_pb  Illumina + PacBio HiFi
-  -r DIR        Short-read directory, <sample>_1.fastq.gz / <sample>_2.fastq.gz
+  -r DIR        Short-read directory: <sample>_1.fastq.gz/_2.fastq.gz or
+                <sample>_R1.fastq.gz/_R2.fastq.gz
                 (short/hybrid_* modes; default: ${RAW_DIR})
   -l DIR        Long-read directory, one <sample>.fastq.gz per sample
                 (long_*/hybrid_* modes; default: ${LONG_DIR})
@@ -265,15 +266,39 @@ run_step() {
 # ---------------------------------------------------------------------------
 # Sample discovery
 # ---------------------------------------------------------------------------
-declare -a SAMPLE_LIST
+# Short-read pairs are recognized as <sample>_1/_2.fastq.gz or
+# <sample>_R1/_R2.fastq.gz (both are common). Sets RAW_R1/RAW_R2, or leaves
+# them empty if neither convention matches.
+resolve_short_reads() {
+  local sample="$1"
+  if [[ -f "$RAW_DIR/${sample}_1.fastq.gz" ]]; then
+    RAW_R1="$RAW_DIR/${sample}_1.fastq.gz"
+    RAW_R2="$RAW_DIR/${sample}_2.fastq.gz"
+  elif [[ -f "$RAW_DIR/${sample}_R1.fastq.gz" ]]; then
+    RAW_R1="$RAW_DIR/${sample}_R1.fastq.gz"
+    RAW_R2="$RAW_DIR/${sample}_R2.fastq.gz"
+  else
+    RAW_R1=""; RAW_R2=""
+  fi
+}
+
+# Explicit =() (not just `declare -a`): an array that's declared but never
+# assigned an element still trips `set -u` on `${arr[@]}`/`${#arr[@]}` in
+# bash, even in recent versions.
+SAMPLE_LIST=()
 if [[ -n "$SAMPLES" ]]; then
   IFS=',' read -r -a SAMPLE_LIST <<< "$SAMPLES"
 elif [[ "$USE_SHORT" -eq 1 ]]; then
-  for f in "$RAW_DIR"/*_1.fastq.gz; do
+  for f in "$RAW_DIR"/*_1.fastq.gz "$RAW_DIR"/*_R1.fastq.gz; do
     [[ -e "$f" ]] || continue
     base=$(basename "$f")
     SAMPLE_LIST+=("${base%_1.fastq.gz}")
+    SAMPLE_LIST[-1]="${SAMPLE_LIST[-1]%_R1.fastq.gz}"
   done
+  # Dedupe in case a sample somehow matched both patterns.
+  if [[ ${#SAMPLE_LIST[@]} -gt 0 ]]; then
+    mapfile -t SAMPLE_LIST < <(printf '%s\n' "${SAMPLE_LIST[@]}" | sort -u)
+  fi
 else
   for f in "$LONG_DIR"/*.fastq.gz; do
     [[ -e "$f" ]] || continue
@@ -289,9 +314,11 @@ fi
 
 for sample in "${SAMPLE_LIST[@]}"; do
   if [[ "$USE_SHORT" -eq 1 ]]; then
-    r1="$RAW_DIR/${sample}_1.fastq.gz"; r2="$RAW_DIR/${sample}_2.fastq.gz"
-    if [[ ! -f "$r1" || ! -f "$r2" ]]; then
-      echo "Missing short reads for sample '$sample' ($r1 / $r2)" >&2
+    resolve_short_reads "$sample"
+    if [[ -z "$RAW_R1" || ! -f "$RAW_R1" || ! -f "$RAW_R2" ]]; then
+      echo "Missing short reads for sample '$sample' (looked for" \
+           "${sample}_1.fastq.gz/_2.fastq.gz and ${sample}_R1.fastq.gz/_R2.fastq.gz" \
+           "in '$RAW_DIR')" >&2
       exit 1
     fi
   fi
@@ -329,12 +356,13 @@ for sample in "${SAMPLE_LIST[@]}"; do
 
   # --- QC / filtering ---
   if [[ "$USE_SHORT" -eq 1 ]]; then
+    resolve_short_reads "$sample"
     filt_r1="$sample_qc_dir/${sample}_filtered_1.fastq.gz"
     filt_r2="$sample_qc_dir/${sample}_filtered_2.fastq.gz"
     run_step "trimmomatic:$sample" "$LOG_DIR/${sample}_trimmomatic.log" "$filt_r1" \
       trimmomatic PE -threads "$THREADS" -phred33 \
         -summary "$sample_qc_dir/summary.txt" -compressLevel 5 \
-        "$RAW_DIR/${sample}_1.fastq.gz" "$RAW_DIR/${sample}_2.fastq.gz" \
+        "$RAW_R1" "$RAW_R2" \
         "$filt_r1" "$sample_qc_dir/${sample}_unpaired_1.fastq.gz" \
         "$filt_r2" "$sample_qc_dir/${sample}_unpaired_2.fastq.gz" \
         ILLUMINACLIP:"${ADAPTER}":2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36
