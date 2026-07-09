@@ -27,6 +27,30 @@ and selects one of:
 All modes converge on the same final assembly FASTA, so CheckM (batch, over
 every sample) and Bakta annotation run identically regardless of mode.
 
+## Tools
+
+| Tool | Tested version | Used by | Homepage |
+|---|---|---|---|
+| Trimmomatic | 0.41 | short / hybrid_* | [github.com/usadellab/Trimmomatic](https://github.com/usadellab/Trimmomatic) |
+| SPAdes | 4.3.0 | short / hybrid_* | [github.com/ablab/spades](https://github.com/ablab/spades) |
+| BBMap / BBTools | 39.81 | short / hybrid_* | [bbmap.org](https://bbmap.org/) |
+| Filtlong | 0.3.1 | long_* / hybrid_* | [github.com/rrwick/Filtlong](https://github.com/rrwick/Filtlong) |
+| Flye | 2.9.6 | long_* | [github.com/mikolmogorov/Flye](https://github.com/mikolmogorov/Flye) |
+| medaka | 2.2.1 | long_np | [github.com/nanoporetech/medaka](https://github.com/nanoporetech/medaka) |
+| minimap2 | 2.31 | long_* / hybrid_* | [github.com/lh3/minimap2](https://github.com/lh3/minimap2) |
+| samtools | 1.23.1 | long_* / hybrid_* | [github.com/samtools/samtools](https://github.com/samtools/samtools) |
+| mosdepth | 0.3.14 | long_* | [github.com/brentp/mosdepth](https://github.com/brentp/mosdepth) |
+| QUAST | 5.3.0 | every mode | [github.com/ablab/quast](https://github.com/ablab/quast) |
+| CheckM | 1.2.x | every mode | [github.com/Ecogenomics/CheckM](https://github.com/Ecogenomics/CheckM) |
+| Bakta | 1.11.4 | every mode | [github.com/oschwengers/bakta](https://github.com/oschwengers/bakta) |
+| pyhmmer | 0.11.4 (`<0.12`) | every mode (Bakta dependency) | [github.com/althonos/pyhmmer](https://github.com/althonos/pyhmmer) |
+
+Versions are what this pipeline was tested against — `environment.yml`
+doesn't hard-pin most of them, so newer releases will likely work too,
+except `pyhmmer`, which must stay `<0.12` (see [Notes](#notes)). If you're
+not using conda, install each of these yourself and make sure it's on
+`PATH`; the link in each row goes to that tool's own install instructions.
+
 ## Getting started
 
 ### 1. Clone the repository
@@ -36,17 +60,19 @@ git clone https://github.com/ystone1101/bacteria-wgs-pipeline.git
 cd bacteria-wgs-pipeline
 ```
 
-### 2. Create the conda environment
+### 2. Install the tools
+
+#### Using conda/mamba (recommended)
 
 Requires [conda](https://docs.conda.io/) or [mamba](https://mamba.readthedocs.io/)
-(mamba solves much faster — recommended). `environment.yml` installs every
-tool the pipeline needs into one env called `bacteria_wgs`:
+(mamba solves much faster). `environment.yml` installs every tool the
+pipeline needs into one env called `bacteria_wgs`:
 
 ```bash
 mamba env create -f environment.yml   # or: conda env create -f environment.yml
 ```
 
-### 3. Activate it and sanity-check the tools
+Activate it and sanity-check the tools:
 
 ```bash
 conda activate bacteria_wgs
@@ -63,7 +89,14 @@ bakta --version
 You'll need to reactivate this env (`conda activate bacteria_wgs`) in every
 new terminal session before running the pipeline.
 
-### 4. Set up `config.sh`
+#### Without conda
+
+Install each tool listed in [Tools](#tools) yourself and confirm it's on
+`PATH` (e.g. `trimmomatic -version`, `spades.py --version`, ...). There's
+no environment to activate — just make sure every tool resolves before you
+run the pipeline.
+
+### 3. Set up `config.sh`
 
 `config.sh` holds machine-specific paths (adapter file, Bakta database,
 etc.) and is git-ignored — it's meant to stay local, not get committed.
@@ -90,7 +123,7 @@ Then edit `config.sh` and fill in:
 Any of these can also be overridden per-run with a command-line flag
 instead of editing `config.sh` (see `-h`).
 
-### 5. (Optional) Put the pipeline on `PATH`
+### 4. (Optional) Put the pipeline on `PATH`
 
 So you can call it as a plain command from any directory, instead of
 `cd`-ing into this folder every time:
@@ -105,13 +138,15 @@ ln -s ~/tools/bacteria_wgs_pipeline/bacteria_wgs_pipeline.sh \
   "$CONDA_PREFIX/bin/bacteria_wgs_pipeline"
 ```
 
-The script resolves symlinks back to its real directory, so it still finds
-`config.sh` next to itself. From then on, whenever the `bacteria_wgs` env is
-active, `bacteria_wgs_pipeline` works from any directory. (The examples
-below use `./bacteria_wgs_pipeline.sh`; swap in `bacteria_wgs_pipeline` if
-you did this step.)
+(Not using conda: symlink into any directory already on your `PATH`
+instead of `$CONDA_PREFIX/bin`.)
 
-### 6. Lay out your reads
+The script resolves symlinks back to its real directory, so it still finds
+`config.sh` next to itself. From then on, `bacteria_wgs_pipeline` works
+from any directory. (The examples below use `./bacteria_wgs_pipeline.sh`;
+swap in `bacteria_wgs_pipeline` if you did this step.)
+
+### 5. Lay out your reads
 
 Sample names come from the read filenames — pick a folder per read type
 and name files by sample:
@@ -128,7 +163,7 @@ raw_read/16N2L7_1.fastq.gz   raw_read/16N2L7_2.fastq.gz
 raw_long/16N2L7.fastq.gz
 ```
 
-### 7. Run it
+### 6. Run it
 
 `--mode` is required; the script refuses to run without it.
 
@@ -152,7 +187,7 @@ raw_long/16N2L7.fastq.gz
 
 Run `./bacteria_wgs_pipeline.sh -h` for the full option list.
 
-### 8. Check the results
+### 7. Check the results
 
 Everything lands under the `-o` directory, numbered so it sorts in
 pipeline order:
@@ -171,34 +206,11 @@ Progress prints with colored `START`/`DONE`/`FAIL`/`SKIP` status and a
 summary at the end; colors auto-disable when output isn't a terminal (e.g.
 redirected to a log file).
 
-### 9. If a run fails partway through
+### 8. If a run fails partway through
 
 Just re-run the same command. Each step is skipped if its expected output
 already exists, so you resume right after the failure instead of starting
 over. Pass `--force` to re-run every step regardless.
-
-## Tools & versions
-
-If you're not using conda/`environment.yml`, install these directly —
-versions below are what this pipeline was tested against (`environment.yml`
-doesn't hard-pin most of them, so newer releases will likely work too,
-except `pyhmmer`, which must stay `<0.12`; see [Notes](#notes)).
-
-| Tool | Tested version | Used by | Homepage |
-|---|---|---|---|
-| Trimmomatic | 0.41 | short / hybrid_* | [github.com/usadellab/Trimmomatic](https://github.com/usadellab/Trimmomatic) |
-| SPAdes | 4.3.0 | short / hybrid_* | [github.com/ablab/spades](https://github.com/ablab/spades) |
-| BBMap / BBTools | 39.81 | short / hybrid_* | [bbmap.org](https://bbmap.org/) |
-| Filtlong | 0.3.1 | long_* / hybrid_* | [github.com/rrwick/Filtlong](https://github.com/rrwick/Filtlong) |
-| Flye | 2.9.6 | long_* | [github.com/mikolmogorov/Flye](https://github.com/mikolmogorov/Flye) |
-| medaka | 2.2.1 | long_np | [github.com/nanoporetech/medaka](https://github.com/nanoporetech/medaka) |
-| minimap2 | 2.31 | long_* / hybrid_* | [github.com/lh3/minimap2](https://github.com/lh3/minimap2) |
-| samtools | 1.23.1 | long_* / hybrid_* | [github.com/samtools/samtools](https://github.com/samtools/samtools) |
-| mosdepth | 0.3.14 | long_* | [github.com/brentp/mosdepth](https://github.com/brentp/mosdepth) |
-| QUAST | 5.3.0 | every mode | [github.com/ablab/quast](https://github.com/ablab/quast) |
-| CheckM | 1.2.x | every mode | [github.com/Ecogenomics/CheckM](https://github.com/Ecogenomics/CheckM) |
-| Bakta | 1.11.4 | every mode | [github.com/oschwengers/bakta](https://github.com/oschwengers/bakta) |
-| pyhmmer | 0.11.4 (`<0.12`) | every mode (Bakta dependency) | [github.com/althonos/pyhmmer](https://github.com/althonos/pyhmmer) |
 
 ## What each mode does, in detail
 
