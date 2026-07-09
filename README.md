@@ -177,6 +177,29 @@ Just re-run the same command. Each step is skipped if its expected output
 already exists, so you resume right after the failure instead of starting
 over. Pass `--force` to re-run every step regardless.
 
+## Tools & versions
+
+If you're not using conda/`environment.yml`, install these directly —
+versions below are what this pipeline was tested against (`environment.yml`
+doesn't hard-pin most of them, so newer releases will likely work too,
+except `pyhmmer`, which must stay `<0.12`; see [Notes](#notes)).
+
+| Tool | Tested version | Used by | Homepage |
+|---|---|---|---|
+| Trimmomatic | 0.41 | short / hybrid_* | [github.com/usadellab/Trimmomatic](https://github.com/usadellab/Trimmomatic) |
+| SPAdes | 4.3.0 | short / hybrid_* | [github.com/ablab/spades](https://github.com/ablab/spades) |
+| BBMap / BBTools | 39.81 | short / hybrid_* | [bbmap.org](https://bbmap.org/) |
+| Filtlong | 0.3.1 | long_* / hybrid_* | [github.com/rrwick/Filtlong](https://github.com/rrwick/Filtlong) |
+| Flye | 2.9.6 | long_* | [github.com/mikolmogorov/Flye](https://github.com/mikolmogorov/Flye) |
+| medaka | 2.2.1 | long_np | [github.com/nanoporetech/medaka](https://github.com/nanoporetech/medaka) |
+| minimap2 | 2.31 | long_* / hybrid_* | [github.com/lh3/minimap2](https://github.com/lh3/minimap2) |
+| samtools | 1.23.1 | long_* / hybrid_* | [github.com/samtools/samtools](https://github.com/samtools/samtools) |
+| mosdepth | 0.3.14 | long_* | [github.com/brentp/mosdepth](https://github.com/brentp/mosdepth) |
+| QUAST | 5.3.0 | every mode | [github.com/ablab/quast](https://github.com/ablab/quast) |
+| CheckM | 1.2.x | every mode | [github.com/Ecogenomics/CheckM](https://github.com/Ecogenomics/CheckM) |
+| Bakta | 1.11.4 | every mode | [github.com/oschwengers/bakta](https://github.com/oschwengers/bakta) |
+| pyhmmer | 0.11.4 (`<0.12`) | every mode (Bakta dependency) | [github.com/althonos/pyhmmer](https://github.com/althonos/pyhmmer) |
+
 ## What each mode does, in detail
 
 For every sample, depending on `--mode`:
@@ -229,3 +252,48 @@ Finally:
 - `bakta<=1.11.4` crashes late in the annotation step (`AttributeError:
   'str' object has no attribute 'decode'`) if paired with `pyhmmer>=0.12`
   — `environment.yml` pins `pyhmmer<0.12` to avoid this.
+
+## References
+
+If you use this pipeline, please cite the underlying tools:
+
+- Bolger AM, Lohse M, Usadel B. Trimmomatic: a flexible trimmer for
+  Illumina sequence data. *Bioinformatics*. 2014;30(15):2114–2120.
+  [doi:10.1093/bioinformatics/btu170](https://doi.org/10.1093/bioinformatics/btu170)
+- Bankevich A, et al. SPAdes: a new genome assembly algorithm and its
+  applications to single-cell sequencing. *J Comput Biol*. 2012;19(5):455–477.
+  [doi:10.1089/cmb.2012.0021](https://doi.org/10.1089/cmb.2012.0021) — for
+  hybrid_np/hybrid_pb, also cite Antipov D, Korobeynikov A, McLean JS,
+  Pevzner PA. hybridSPAdes: an algorithm for hybrid assembly of short and
+  long reads. *Bioinformatics*. 2016;32(7):1009–1015.
+  [doi:10.1093/bioinformatics/btv688](https://doi.org/10.1093/bioinformatics/btv688)
+- Bushnell B. BBMap / BBTools. No peer-reviewed paper; cite the software
+  directly: [bbmap.org](https://bbmap.org/) (or the conference paper,
+  [escholarship.org/uc/item/1h3515gn](https://escholarship.org/uc/item/1h3515gn)).
+- Wick RR. Filtlong. No associated paper; cite the repository:
+  [github.com/rrwick/Filtlong](https://github.com/rrwick/Filtlong)
+- Kolmogorov M, Yuan J, Lin Y, Pevzner PA. Assembly of long, error-prone
+  reads using repeat graphs. *Nat Biotechnol*. 2019;37:540–546.
+  [doi:10.1038/s41587-019-0072-8](https://doi.org/10.1038/s41587-019-0072-8)
+- Oxford Nanopore Technologies. medaka. No associated paper; cite the
+  repository: [github.com/nanoporetech/medaka](https://github.com/nanoporetech/medaka)
+- Li H. Minimap2: pairwise alignment for nucleotide sequences.
+  *Bioinformatics*. 2018;34(18):3094–3100.
+  [doi:10.1093/bioinformatics/bty191](https://doi.org/10.1093/bioinformatics/bty191)
+- Danecek P, et al. Twelve years of SAMtools and BCFtools. *GigaScience*.
+  2021;10(2):giab008.
+  [doi:10.1093/gigascience/giab008](https://doi.org/10.1093/gigascience/giab008)
+- Pedersen BS, Quinlan AR. Mosdepth: quick coverage calculation for genomes
+  and exomes. *Bioinformatics*. 2018;34(5):867–868.
+  [doi:10.1093/bioinformatics/btx699](https://doi.org/10.1093/bioinformatics/btx699)
+- Gurevich A, Saveliev V, Vyahhi N, Tesler G. QUAST: quality assessment
+  tool for genome assemblies. *Bioinformatics*. 2013;29(8):1072–1075.
+  [doi:10.1093/bioinformatics/btt086](https://doi.org/10.1093/bioinformatics/btt086)
+- Parks DH, Imelfort M, Skennerton CT, Hugenholtz P, Tyson GW. CheckM:
+  assessing the quality of microbial genomes recovered from isolates,
+  single cells, and metagenomes. *Genome Res*. 2015;25(7):1043–1055.
+  [doi:10.1101/gr.186072.114](https://doi.org/10.1101/gr.186072.114)
+- Schwengers O, Jelonek L, Dieckmann MA, Beyvers S, Blom J, Goesmann A.
+  Bakta: rapid and standardized annotation of bacterial genomes via
+  alignment-free sequence identification. *Microb Genom*. 2021;7(11):000685.
+  [doi:10.1099/mgen.0.000685](https://doi.org/10.1099/mgen.0.000685)
