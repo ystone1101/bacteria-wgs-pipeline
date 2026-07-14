@@ -97,6 +97,23 @@ Install each tool listed in [Tools](#tools) yourself and confirm it's on
 no environment to activate — just make sure every tool resolves before you
 run the pipeline.
 
+#### Using the Nextflow version instead
+
+There's also a Nextflow DSL2 port of this pipeline under
+[`nextflow/`](nextflow/) — same modes, same tool chain, just run through
+Nextflow instead of the bash script directly. See
+[`nextflow/README.md`](nextflow/README.md) for its own setup and usage. If
+you go that route, you additionally need [Nextflow](https://www.nextflow.io/)
+itself (>= 23.04) on `PATH`:
+
+```bash
+curl -s https://get.nextflow.io | bash
+```
+
+on top of the tools above — the Nextflow version reuses the same
+`environment.yml` via `-profile conda`, so the rest of this "Install the
+tools" step still applies either way.
+
 ### 3. Set up reference databases
 
 Two tools need an external database on top of what conda installs — a
