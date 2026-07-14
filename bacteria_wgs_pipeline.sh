@@ -102,8 +102,8 @@ Usage: $(basename "$0") --mode {short,long_np,long_pb,hybrid_np,hybrid_pb} [opti
 short:     Trimmomatic -> SPAdes -> reformat.sh -> QUAST -> BBMap
 long_np:   Filtlong -> Flye --nano-* -> medaka -> reformat.sh -> QUAST -> minimap2/mosdepth
 long_pb:   Filtlong -> Flye --pacbio-hifi -> reformat.sh -> QUAST -> minimap2/mosdepth
-hybrid_np: Trimmomatic + Filtlong -> SPAdes --nanopore     -> reformat.sh -> QUAST -> BBMap+minimap2/pileup
-hybrid_pb: Trimmomatic + Filtlong -> SPAdes -s (HiFi as extra library) -> reformat.sh -> QUAST -> BBMap+minimap2/pileup
+hybrid_np: Trimmomatic + Filtlong -> SPAdes --nanopore     -> reformat.sh -> QUAST -> BBMap + minimap2/mosdepth (separate)
+hybrid_pb: Trimmomatic + Filtlong -> SPAdes -s (HiFi as extra library) -> reformat.sh -> QUAST -> BBMap + minimap2/mosdepth (separate)
 
 Once every sample has an assembly, CheckM runs once over all of them, then
 Bakta annotates each sample's final assembly (same for every mode).
@@ -199,10 +199,9 @@ format_duration() {
 check_deps() {
   local tools=(reformat.sh quast.py)
   [[ "$USE_SHORT" -eq 1 ]] && tools+=(trimmomatic spades.py bbmap.sh)
-  [[ "$USE_LONG" -eq 1 ]] && tools+=(filtlong minimap2 samtools)
-  [[ "$MODE" == long_* ]] && tools+=(flye mosdepth)
+  [[ "$USE_LONG" -eq 1 ]] && tools+=(filtlong minimap2 samtools mosdepth)
+  [[ "$MODE" == long_* ]] && tools+=(flye)
   [[ "$MODE" == "long_np" ]] && tools+=(medaka_consensus)
-  [[ "$MODE" == hybrid_* ]] && tools+=(pileup.sh)
   [[ "$SKIP_CHECKM" -eq 1 ]] || tools+=(checkm)
   [[ "$SKIP_BAKTA" -eq 1 ]] || tools+=(bakta)
   local missing=()
@@ -457,23 +456,50 @@ for sample in "${SAMPLE_LIST[@]}"; do
         '
       ;;
     hybrid_np|hybrid_pb)
-      # Map short and long reads separately, then combine via pileup.sh's
-      # multi-bam input (samtools merge chokes on bbmap.sh vs minimap2
-      # headers here, so this sidesteps it).
-      run_step "coverage:$sample" "$LOG_DIR/${sample}_coverage.log" \
-          "$sample_quast_dir/${sample}_total_hybrid_coverage.txt" \
+      # Per-platform numbers (always useful on their own), plus one true
+      # combined figure via samtools merge. The earlier merge failure was
+      # most likely because the short-read bam was never coordinate-sorted
+      # while the long-read bam was -- samtools merge requires matching
+      # sort order across inputs. Sorting both the same way fixes that.
+      run_step "bbmap_coverage:$sample" "$LOG_DIR/${sample}_coverage.log" \
+          "$sample_quast_dir/${sample}_illumina_cov.txt" \
         env THREADS="$THREADS" FASTA="$final_fasta" R1="$filt_r1" R2="$filt_r2" \
-            LONG="$filt_long" PRESET="$MINIMAP_PRESET" \
-            ILL_BAM="$sample_quast_dir/${sample}_illumina.bam" \
-            ILL_COV="$sample_quast_dir/${sample}_illumina_cov.txt" \
-            LONG_BAM="$sample_quast_dir/${sample}_long.bam" \
-            TOTAL_COV="$sample_quast_dir/${sample}_total_hybrid_coverage.txt" \
-            HIST="$sample_quast_dir/${sample}_coverage_histogram.txt" \
+            RAW_BAM="$sample_quast_dir/${sample}_illumina.unsorted.bam" \
+            BAM="$sample_quast_dir/${sample}_illumina.sorted.bam" \
+            COV="$sample_quast_dir/${sample}_illumina_cov.txt" \
         bash -c '
           set -euo pipefail
-          bbmap.sh ref="$FASTA" in1="$R1" in2="$R2" out="$ILL_BAM" covstats="$ILL_COV" threads="$THREADS"
-          minimap2 -ax "$PRESET" -t "$THREADS" "$FASTA" "$LONG" | samtools view -bS - > "$LONG_BAM"
-          pileup.sh in="$ILL_BAM","$LONG_BAM" out="$TOTAL_COV" hist="$HIST"
+          bbmap.sh ref="$FASTA" in1="$R1" in2="$R2" out="$RAW_BAM" covstats="$COV" threads="$THREADS"
+          samtools sort -@ "$THREADS" -o "$BAM" "$RAW_BAM"
+          samtools index "$BAM"
+          rm -f "$RAW_BAM"
+        '
+
+      run_step "long_coverage:$sample" "$LOG_DIR/${sample}_long_coverage.log" \
+          "$sample_quast_dir/${sample}_long_coverage.mosdepth.summary.txt" \
+        env THREADS="$THREADS" FASTA="$final_fasta" LONG="$filt_long" PRESET="$MINIMAP_PRESET" \
+            BAM="$sample_quast_dir/${sample}_long.sorted.bam" \
+            PREFIX="$sample_quast_dir/${sample}_long_coverage" \
+        bash -c '
+          set -euo pipefail
+          minimap2 -ax "$PRESET" -t "$THREADS" "$FASTA" "$LONG" \
+            | samtools sort -@ "$THREADS" -o "$BAM" -
+          samtools index "$BAM"
+          mosdepth -n -t "$THREADS" --fast-mode "$PREFIX" "$BAM"
+        '
+
+      run_step "total_coverage:$sample" "$LOG_DIR/${sample}_total_coverage.log" \
+          "$sample_quast_dir/${sample}_total_coverage.mosdepth.summary.txt" \
+        env THREADS="$THREADS" \
+            ILL_BAM="$sample_quast_dir/${sample}_illumina.sorted.bam" \
+            LONG_BAM="$sample_quast_dir/${sample}_long.sorted.bam" \
+            MERGED_BAM="$sample_quast_dir/${sample}_merged.sorted.bam" \
+            PREFIX="$sample_quast_dir/${sample}_total_coverage" \
+        bash -c '
+          set -euo pipefail
+          samtools merge -f -@ "$THREADS" "$MERGED_BAM" "$ILL_BAM" "$LONG_BAM"
+          samtools index "$MERGED_BAM"
+          mosdepth -n -t "$THREADS" --fast-mode "$PREFIX" "$MERGED_BAM"
         '
       ;;
   esac

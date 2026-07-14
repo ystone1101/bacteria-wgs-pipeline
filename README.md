@@ -17,12 +17,13 @@ and selects one of:
   (no polishing step — medaka is ONT-trained and doesn't apply to HiFi)
 - **hybrid_np** — Illumina + Nanopore together
   Trimmomatic + Filtlong → SPAdes `--nanopore` → reformat.sh → QUAST →
-  BBMap + minimap2 (`map-ont`) mapping, combined via pileup.sh
+  BBMap (short) + minimap2 `map-ont` (long) coverage, plus both merged
+  into one combined mosdepth coverage figure
 - **hybrid_pb** — Illumina + PacBio HiFi together
   Trimmomatic + Filtlong → SPAdes `-s` (HiFi fed in as an extra single-read
   library — SPAdes has no `--pacbio-hifi` flag; `--pacbio` is for noisy CLR
-  reads) → reformat.sh → QUAST → BBMap + minimap2 (`map-hifi`) mapping,
-  combined via pileup.sh
+  reads) → reformat.sh → QUAST → BBMap (short) + minimap2 `map-hifi` (long)
+  coverage, plus both merged into one combined mosdepth coverage figure
 
 All modes converge on the same final assembly FASTA, so CheckM (batch, over
 every sample) and Bakta annotation run identically regardless of mode.
@@ -39,7 +40,7 @@ every sample) and Bakta annotation run identically regardless of mode.
 | medaka | 2.2.1 | long_np | [github.com/nanoporetech/medaka](https://github.com/nanoporetech/medaka) |
 | minimap2 | 2.31 | long_* / hybrid_* | [github.com/lh3/minimap2](https://github.com/lh3/minimap2) |
 | samtools | 1.23.1 | long_* / hybrid_* | [github.com/samtools/samtools](https://github.com/samtools/samtools) |
-| mosdepth | 0.3.14 | long_* | [github.com/brentp/mosdepth](https://github.com/brentp/mosdepth) |
+| mosdepth | 0.3.14 | long_* / hybrid_* | [github.com/brentp/mosdepth](https://github.com/brentp/mosdepth) |
 | QUAST | 5.3.0 | every mode | [github.com/ablab/quast](https://github.com/ablab/quast) |
 | CheckM | 1.2.x | every mode | [github.com/Ecogenomics/CheckM](https://github.com/Ecogenomics/CheckM) |
 | Bakta | 1.11.4 | every mode | [github.com/oschwengers/bakta](https://github.com/oschwengers/bakta) |
@@ -278,10 +279,17 @@ Then, regardless of mode:
   - short: `bbmap.sh covstats=` → `coverage_stats.txt`
   - long_np/long_pb: `minimap2` (`map-ont`/`map-hifi`) → sorted/indexed bam
     → `mosdepth` → `<sample>_coverage.mosdepth.summary.txt`
-  - hybrid_*: short reads via `bbmap.sh` and long reads via `minimap2` are
-    mapped to separate bams, then combined with `pileup.sh in=a.bam,b.bam`
-    → `<sample>_total_hybrid_coverage.txt` (`samtools merge` doesn't play
-    well with bbmap.sh vs minimap2 headers, so this sidesteps it)
+  - hybrid_*: three numbers —
+    `bbmap.sh covstats=` → `<sample>_illumina_cov.txt` (short only),
+    `minimap2`+`mosdepth` → `<sample>_long_coverage.mosdepth.summary.txt`
+    (long only), and both bams coordinate-sorted then combined with
+    `samtools merge` → `mosdepth` → `<sample>_total_coverage.mosdepth.summary.txt`
+    (short+long combined). The short-read bam needs an explicit
+    `samtools sort` first — bbmap.sh's own `out=` isn't coordinate-sorted,
+    and `samtools merge` requires matching sort order across inputs, which
+    was the actual cause of earlier merge failures. (`pileup.sh`'s `in=`
+    was also tried for this — despite appearances, it does not accept a
+    comma-separated multi-bam list; it silently reads only the first file.)
 
 Once every sample has a final assembly, they are all copied into
 `04_checkm/bins/` and:
