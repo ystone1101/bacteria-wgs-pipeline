@@ -461,8 +461,12 @@ for sample in "${SAMPLE_LIST[@]}"; do
       # most likely because the short-read bam was never coordinate-sorted
       # while the long-read bam was -- samtools merge requires matching
       # sort order across inputs. Sorting both the same way fixes that.
+      # Marker is the sorted+indexed bam (what total_coverage below needs),
+      # not the covstats file -- an older pipeline version only produced
+      # the covstats file here, so using it as the marker would let a
+      # resumed run skip this step while still missing the bam.
       run_step "bbmap_coverage:$sample" "$LOG_DIR/${sample}_coverage.log" \
-          "$sample_quast_dir/${sample}_illumina_cov.txt" \
+          "$sample_quast_dir/${sample}_illumina.sorted.bam.bai" \
         env THREADS="$THREADS" FASTA="$final_fasta" R1="$filt_r1" R2="$filt_r2" \
             RAW_BAM="$sample_quast_dir/${sample}_illumina.unsorted.bam" \
             BAM="$sample_quast_dir/${sample}_illumina.sorted.bam" \
