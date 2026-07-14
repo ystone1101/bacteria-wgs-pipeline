@@ -1,0 +1,3 @@
+sample,fastq_1,fastq_2,long_reads
+S1,/full/path/to/raw_read/S1_1.fastq.gz,/full/path/to/raw_read/S1_2.fastq.gz,/full/path/to/raw_long/S1.fastq.gz
+S2,/full/path/to/raw_read/S2_1.fastq.gz,/full/path/to/raw_read/S2_2.fastq.gz,/full/path/to/raw_long/S2.fastq.gz
