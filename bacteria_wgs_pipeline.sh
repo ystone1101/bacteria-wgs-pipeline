@@ -57,6 +57,8 @@ SAMPLES=""
 SKIP_CHECKM=0
 SKIP_BAKTA=0
 FORCE=0
+GENOME_SIZE=""
+ASM_COVERAGE=""
 
 if [[ -f "$SCRIPT_DIR/config.sh" ]]; then
   # shellcheck source=config.sh
@@ -94,6 +96,15 @@ Usage: $(basename "$0") --mode {short,long_np,long_pb,hybrid_np,hybrid_pb} [opti
   -d DIR        Bakta database directory (default: ${BAKTA_DB})
   -m INT        Minimum contig length kept after assembly (default: ${MIN_LENGTH})
   --tmp-dir DIR Temp directory for Bakta (default: ${TMP_DIR})
+  -g SIZE       Genome size for Flye (long_np/long_pb only, e.g. 5.8m).
+                Only takes effect together with --asm-coverage; unset by
+                default (Flye uses all reads for the initial assembly).
+  --asm-coverage N
+                Cap Flye's initial disjointig-assembly coverage to N x the
+                longest reads (long_np/long_pb only; requires -g). Fixes
+                Flye's "No disjointigs were assembled" failure on very
+                high-coverage runs (documented at >800x, seen in practice
+                around 600x+); 40-50 is Flye's own recommended range.
   --skip-checkm Skip the CheckM step
   --skip-bakta  Skip the Bakta annotation step
   --force       Re-run steps even if their output already exists
@@ -128,6 +139,8 @@ while [[ $# -gt 0 ]]; do
     -d) BAKTA_DB="$2"; shift 2 ;;
     -m) MIN_LENGTH="$2"; shift 2 ;;
     --tmp-dir) TMP_DIR="$2"; shift 2 ;;
+    -g) GENOME_SIZE="$2"; shift 2 ;;
+    --asm-coverage) ASM_COVERAGE="$2"; shift 2 ;;
     --skip-checkm) SKIP_CHECKM=1; shift ;;
     --skip-bakta) SKIP_BAKTA=1; shift ;;
     --force) FORCE=1; shift ;;
@@ -224,6 +237,12 @@ check_config() {
   fi
   if [[ "$MODE" == "long_np" ]]; then
     [[ -n "$MEDAKA_MODEL" ]] || errors+=("MEDAKA_MODEL is not set (see config.sh)")
+  fi
+  if [[ -n "$ASM_COVERAGE" && -z "$GENOME_SIZE" ]]; then
+    errors+=("--asm-coverage requires -g (genome size) to also be set")
+  fi
+  if [[ -n "$GENOME_SIZE" && -z "$ASM_COVERAGE" ]]; then
+    errors+=("-g (genome size) has no effect without --asm-coverage")
   fi
   if [[ "$SKIP_BAKTA" -eq 0 ]]; then
     [[ "$BAKTA_DB" == /* ]] || errors+=("BAKTA_DB is not an absolute path: '$BAKTA_DB'")
@@ -333,6 +352,13 @@ done
 check_deps
 check_config
 
+# Only takes effect for long_np/long_pb; empty unless both -g and
+# --asm-coverage were passed (validated together in check_config).
+FLYE_EXTRA_ARGS=()
+if [[ -n "$GENOME_SIZE" && -n "$ASM_COVERAGE" ]]; then
+  FLYE_EXTRA_ARGS=(--genome-size "$GENOME_SIZE" --asm-coverage "$ASM_COVERAGE")
+fi
+
 banner "Bacteria WGS Pipeline"
 echo "  ${C_BOLD}Mode${C_RESET}      : $MODE${PLATFORM:+ ($PLATFORM)}"
 echo "  ${C_BOLD}Samples${C_RESET}   : ${SAMPLE_LIST[*]}"
@@ -399,7 +425,8 @@ for sample in "${SAMPLE_LIST[@]}"; do
       ;;
     long_np)
       run_step "flye:$sample" "$LOG_DIR/${sample}_flye.log" "$sample_asm_dir/assembly.fasta" \
-        flye "$FLYE_READ_TYPE" "$filt_long" --out-dir "$sample_asm_dir" --threads "$THREADS"
+        flye "$FLYE_READ_TYPE" "$filt_long" --out-dir "$sample_asm_dir" --threads "$THREADS" \
+          "${FLYE_EXTRA_ARGS[@]}"
 
       medaka_dir="$sample_asm_dir/medaka"
       run_step "medaka:$sample" "$LOG_DIR/${sample}_medaka.log" "$medaka_dir/consensus.fasta" \
@@ -409,7 +436,8 @@ for sample in "${SAMPLE_LIST[@]}"; do
       ;;
     long_pb)
       run_step "flye:$sample" "$LOG_DIR/${sample}_flye.log" "$sample_asm_dir/assembly.fasta" \
-        flye "$FLYE_PACBIO_READ_TYPE" "$filt_long" --out-dir "$sample_asm_dir" --threads "$THREADS"
+        flye "$FLYE_PACBIO_READ_TYPE" "$filt_long" --out-dir "$sample_asm_dir" --threads "$THREADS" \
+          "${FLYE_EXTRA_ARGS[@]}"
       # No medaka: it's an ONT-trained polisher, not applicable to PacBio HiFi.
       raw_assembly="$sample_asm_dir/assembly.fasta"
       ;;

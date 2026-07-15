@@ -30,6 +30,11 @@ FILTLONG_KEEP_PERCENT=90
 # --nano-raw for older/fast basecalling models
 FLYE_READ_TYPE="--nano-hq"
 
+# If a run fails with Flye's "No disjointigs were assembled" error (seen
+# on very high per-sample coverage, e.g. deep PromethION runs), pass
+# -g <genome size> --asm-coverage <N> on the command line (see -h) --
+# these aren't config.sh settings since genome size varies per sample.
+
 # medaka polishing model - must match your basecaller/flow cell/kit,
 # e.g. "r1041_e82_400bps_sup_v5.0.0". No safe default; run
 # `medaka tools list_models` to see what's available.
