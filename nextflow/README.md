@@ -5,13 +5,26 @@ five modes, same tools, same command lines under the hood -- just run through
 Nextflow instead of a bash loop, so steps for different samples can run in
 parallel and a crashed run resumes with `-resume` instead of marker files.
 
-> **Not execution-tested.** The bash version has been run end-to-end on real
-> data (`short`, `long_np`, `hybrid_np` all completed successfully). This
-> Nextflow port was written to mirror those exact command lines but has not
-> itself been run, since Nextflow isn't available in the environment it was
-> written in. Do a small dry run (one sample, or `-stub-run`) before trusting
-> it on a real dataset, and compare its output against the bash version's if
-> anything looks off.
+> **Execution status:** `short` and `long_np` have both run end-to-end on
+> real data through every step -- `short`: Trimmomatic → SPAdes →
+> reformat.sh → QUAST → BBMap coverage → CheckM → Bakta; `long_np`:
+> Filtlong → Flye → medaka → reformat.sh → QUAST → minimap2/mosdepth
+> coverage → CheckM → Bakta -- all completing successfully. `long_pb`,
+> `hybrid_np`, `hybrid_pb` are not yet execution-tested through Nextflow
+> (their bash equivalents all work). Do a small dry run on one sample before
+> trusting an untested mode on a real dataset, and compare its output
+> against the bash version's if anything looks off.
+>
+> Getting `short` mode running took a few real fixes along the way, all
+> already applied here: Nextflow's newer versions (26.x) use a stricter
+> parser that rejects `switch/case` and top-level statements outside a
+> process/workflow (use `if/else` and keep everything inside `workflow {}`);
+> and if your Nextflow engine needs an older JDK than your tools' conda env
+> (`NXF_JAVA_HOME` set to boot Nextflow itself), that JDK's `bin/` leaking
+> onto every task's `PATH` can break Java-based tools like Trimmomatic --
+> `nextflow.config`'s `process.beforeScript` here clears that before each
+> task runs. If you hit `Unable to parse config file ... Unsupported class
+> file major version`, pin an older Nextflow via `export NXF_VER=24.10.5`.
 
 ## Modes
 
@@ -85,9 +98,16 @@ task-hash caching replaces the bash script's marker-file skip logic.
 ## Output layout
 
 Same numbering as the bash pipeline, under `--outdir` (default `results`):
-`01_QC/`, `02_assembly/`, `03_quast/`, `04_checkm/`, `05_bakta/`, one
-subdirectory per sample (CheckM's output is batched across all samples, same
-as the bash version).
+`00_logs/`, `01_QC/`, `02_assembly/`, `03_quast/`, `04_checkm/`,
+`05_bakta/`, one subdirectory per sample (CheckM's output is batched
+across all samples, same as the bash version).
+
+`00_logs/` holds each tool's full stdout/stderr (named like the bash
+version's, e.g. `<sample>_coverage.log`, `<sample>_medaka.log`) for every
+step that doesn't already write its own log file into its output
+directory -- SPAdes and Flye do that natively (`spades.log`/`flye.log`
+alongside the assembly under `02_assembly/<sample>/`), so those aren't
+duplicated into `00_logs/`.
 
 ## Differences from the bash version
 
