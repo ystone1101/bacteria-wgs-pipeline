@@ -206,9 +206,17 @@ swap in `bacteria_wgs_pipeline` if you did this step.)
 Sample names come from the read filenames — pick a folder per read type
 and name files by sample:
 
-- Short reads (Illumina): `<sample>_1.fastq.gz`/`<sample>_2.fastq.gz` or
-  `<sample>_R1.fastq.gz`/`<sample>_R2.fastq.gz` (both naming conventions
-  are recognized)
+- Short reads (Illumina): `<sample>_1.fastq.gz`/`<sample>_2.fastq.gz`,
+  `<sample>_R1.fastq.gz`/`<sample>_R2.fastq.gz`, or the sequencer's own
+  default `<sample>_S#_L#_R1_001.fastq.gz`/`_R2_001.fastq.gz` output from
+  bcl2fastq/bcl-convert (all three are recognized). The last one is
+  single-lane only — if a sample was split across multiple lanes,
+  concatenate each read direction into one file first
+  (`cat <sample>_S*_L*_R1_001.fastq.gz > <sample>_1.fastq.gz`, same for
+  R2) rather than pointing the pipeline at the per-lane files directly.
+  Anything else (odd delimiters, `.fwd`/`.rev`, etc.) isn't auto-detected —
+  symlink to one of the three patterns above instead of renaming the
+  originals.
 - Long reads (Nanopore/PacBio): `<sample>.fastq.gz` (one file per sample)
 
 For `hybrid_np`/`hybrid_pb`, the short-read and long-read directories must

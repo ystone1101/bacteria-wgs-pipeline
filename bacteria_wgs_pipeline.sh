@@ -83,8 +83,10 @@ Usage: $(basename "$0") --mode {short,long_np,long_pb,hybrid_np,hybrid_pb} [opti
                   long_pb    PacBio HiFi only
                   hybrid_np  Illumina + Nanopore
                   hybrid_pb  Illumina + PacBio HiFi
-  -r DIR        Short-read directory: <sample>_1.fastq.gz/_2.fastq.gz or
-                <sample>_R1.fastq.gz/_R2.fastq.gz
+  -r DIR        Short-read directory: <sample>_1.fastq.gz/_2.fastq.gz,
+                <sample>_R1.fastq.gz/_R2.fastq.gz, or Illumina's own
+                <sample>_S#_L#_R1_001.fastq.gz/_R2_001.fastq.gz (single
+                lane only -- concatenate multi-lane runs first)
                 (short/hybrid_* modes; default: ${RAW_DIR})
   -l DIR        Long-read directory, one <sample>.fastq.gz per sample
                 (long_*/hybrid_* modes; default: ${LONG_DIR})
@@ -284,9 +286,10 @@ run_step() {
 # ---------------------------------------------------------------------------
 # Sample discovery
 # ---------------------------------------------------------------------------
-# Short-read pairs are recognized as <sample>_1/_2.fastq.gz or
-# <sample>_R1/_R2.fastq.gz (both are common). Sets RAW_R1/RAW_R2, or leaves
-# them empty if neither convention matches.
+# Short-read pairs are recognized as <sample>_1/_2.fastq.gz,
+# <sample>_R1/_R2.fastq.gz, or Illumina's own bcl2fastq/bcl-convert default
+# <sample>_S#_L#_R1_001.fastq.gz/_R2_001.fastq.gz (all common). Sets
+# RAW_R1/RAW_R2, or leaves them empty if no convention matches.
 resolve_short_reads() {
   local sample="$1"
   if [[ -f "$RAW_DIR/${sample}_1.fastq.gz" ]]; then
@@ -297,6 +300,21 @@ resolve_short_reads() {
     RAW_R2="$RAW_DIR/${sample}_R2.fastq.gz"
   else
     RAW_R1=""; RAW_R2=""
+    local r1_matches=("$RAW_DIR/${sample}"_S*_L*_R1_001.fastq.gz)
+    if [[ -e "${r1_matches[0]}" ]]; then
+      if [[ ${#r1_matches[@]} -gt 1 ]]; then
+        echo "ERROR: sample '$sample' has multiple lane files matching" \
+             "${sample}_S*_L*_R1_001.fastq.gz: ${r1_matches[*]}." \
+             "This script doesn't merge multi-lane runs automatically --" \
+             "concatenate each read direction's lanes into one file first, e.g.:" \
+             "  cat ${sample}_S*_L*_R1_001.fastq.gz > ${sample}_1.fastq.gz" \
+             "  cat ${sample}_S*_L*_R2_001.fastq.gz > ${sample}_2.fastq.gz" \
+             "(then re-run; the _1/_2 pair above takes priority over this pattern)." >&2
+        exit 1
+      fi
+      RAW_R1="${r1_matches[0]}"
+      RAW_R2="${RAW_R1/_R1_001.fastq.gz/_R2_001.fastq.gz}"
+    fi
   fi
 }
 
@@ -307,13 +325,17 @@ SAMPLE_LIST=()
 if [[ -n "$SAMPLES" ]]; then
   IFS=',' read -r -a SAMPLE_LIST <<< "$SAMPLES"
 elif [[ "$USE_SHORT" -eq 1 ]]; then
-  for f in "$RAW_DIR"/*_1.fastq.gz "$RAW_DIR"/*_R1.fastq.gz; do
+  for f in "$RAW_DIR"/*_1.fastq.gz "$RAW_DIR"/*_R1.fastq.gz "$RAW_DIR"/*_S*_L*_R1_001.fastq.gz; do
     [[ -e "$f" ]] || continue
     base=$(basename "$f")
-    SAMPLE_LIST+=("${base%_1.fastq.gz}")
-    SAMPLE_LIST[-1]="${SAMPLE_LIST[-1]%_R1.fastq.gz}"
+    base="${base%_1.fastq.gz}"
+    base="${base%_R1.fastq.gz}"
+    base="${base%_S*_L*_R1_001.fastq.gz}"
+    SAMPLE_LIST+=("$base")
   done
-  # Dedupe in case a sample somehow matched both patterns.
+  # Dedupe in case a sample somehow matched more than one pattern, or has
+  # reads split across multiple lanes (resolve_short_reads() errors out on
+  # that case below rather than silently dropping lanes).
   if [[ ${#SAMPLE_LIST[@]} -gt 0 ]]; then
     mapfile -t SAMPLE_LIST < <(printf '%s\n' "${SAMPLE_LIST[@]}" | sort -u)
   fi
